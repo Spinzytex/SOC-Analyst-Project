@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOC Triage Range — Case Console</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root{
+  --ink:#0B0F14;
+  --panel:#11161D;
+  --panel-raised:#161D26;
+  --panel-hi:#1D2630;
+  --rail:#0E1319;
+  --border:#232D3A;
+  --border-soft:#1A222C;
+  --text:#DEE4EC;
+  --muted:#8A96A6;
+  --faint:#57626F;
+  --critical:#F0555A;
+  --warning:#F2A93B;
+  --info:#3FA9F5;
+  --info-dim:#132635;
+  --success:#3FB950;
+  --success-dim:#152A1B;
+  --critical-dim:#301418;
+  --warning-dim:#2E2412;
+  --accent:#7CE0D3;
+}
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0;
+  background:var(--ink);
+  color:var(--text);
+  font-family:'IBM Plex Sans',sans-serif;
+  min-height:100vh;
+  font-size:14px;
+}
+mono, .mono, code{font-family:'IBM Plex Mono',monospace;}
+::-webkit-scrollbar{width:10px;height:10px;}
+::-webkit-scrollbar-track{background:var(--panel);}
+::-webkit-scrollbar-thumb{background:#2A3542;border-radius:5px;}
+::-webkit-scrollbar-thumb:hover{background:#354254;}
+
+/* ============ TOP BAR ============ */
+.topbar{
+  background:var(--rail);
+  border-bottom:1px solid var(--border);
+  padding:9px 16px;
+  display:flex;
+  align-items:center;
+  gap:14px;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:12px;
+  color:var(--muted);
+}
+.topbar .brand{font-family:'Space Grotesk',sans-serif;font-weight:700;color:var(--text);font-size:14px;display:flex;align-items:center;gap:7px;}
+.brand .sq{width:9px;height:9px;background:var(--info);border-radius:2px;display:inline-block;}
+.topbar .crumb{color:var(--faint);}
+.topbar .crumb b{color:var(--muted);font-weight:500;}
+.topbar-spacer{flex:1;}
+.env-pill{background:var(--panel-raised);border:1px solid var(--border);padding:3px 9px;border-radius:5px;font-size:11px;}
+
+/* ============ CASE BAR ============ */
+.casebar{
+  background:var(--panel);
+  border-bottom:1px solid var(--border);
+  padding:14px 20px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  flex-wrap:wrap;
+}
+.casebar .id{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;}
+.casebar .id .sub{color:var(--faint);font-weight:500;font-size:11px;display:block;font-family:'IBM Plex Mono',monospace;letter-spacing:0.6px;margin-bottom:3px;text-transform:uppercase;}
+.casebar-right{display:flex;gap:20px;align-items:center;flex-wrap:wrap;}
+.stat{text-align:right;}
+.stat .label{font-size:9.5px;color:var(--faint);text-transform:uppercase;letter-spacing:1px;font-family:'IBM Plex Mono',monospace;}
+.stat .value{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;}
+.sev-badge{font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;padding:5px 10px;border-radius:5px;letter-spacing:0.5px;background:var(--panel-raised);color:var(--muted);border:1px solid var(--border);}
+.sev-badge.tbd{color:var(--faint);}
+.sev-badge.set{background:var(--critical-dim);color:var(--critical);border-color:var(--critical);}
+
+/* ============ APP LAYOUT ============ */
+.app{display:flex;height:calc(100vh - 96px);min-height:600px;}
+.railnav{
+  width:52px;
+  background:var(--rail);
+  border-right:1px solid var(--border);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  padding:14px 0;
+  gap:4px;
+  flex-shrink:0;
+}
+.railnav .ricon{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:15px;cursor:default;}
+.railnav .ricon.on{background:var(--info-dim);color:var(--info);}
+
+.mainsplit{flex:1;display:flex;min-width:0;}
+.evcol{flex:1.55;display:flex;flex-direction:column;border-right:1px solid var(--border);min-width:0;}
+.qcol{flex:1;display:flex;flex-direction:column;min-width:320px;max-width:520px;}
+
+/* ============ SIDEBAR TABS ============ */
+.tabsidebar{
+  width:210px;
+  flex-shrink:0;
+  background:var(--panel);
+  border-right:1px solid var(--border);
+  overflow-y:auto;
+}
+.tabsidebar .grp-label{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:1px;padding:12px 14px 6px;}
+.tabitem{
+  padding:9px 14px;
+  font-size:12.3px;
+  color:var(--muted);
+  cursor:pointer;
+  border-left:2px solid transparent;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  user-select:none;
+  transition:.12s;
+}
+.tabitem:hover{background:var(--panel-raised);color:var(--text);}
+.tabitem.active{background:var(--panel-hi);color:var(--info);border-left-color:var(--info);font-weight:600;}
+.tabitem .dot{width:5px;height:5px;border-radius:50%;background:var(--faint);flex-shrink:0;}
+.tabitem.viewed .dot{background:var(--success);}
+.tabitem .cnt{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--faint);}
+
+.evheader{
+  padding:10px 16px;
+  border-bottom:1px solid var(--border);
+  display:flex;
+  align-items:center;
+  gap:10px;
+  background:var(--panel);
+  flex-shrink:0;
+}
+.evheader .title{font-family:'Space Grotesk',sans-serif;font-size:13.5px;font-weight:600;}
+.evheader .badgey{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--faint);border:1px solid var(--border);padding:2px 7px;border-radius:4px;}
+.querybar{
+  margin-left:auto;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  background:var(--ink);
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:5px 9px;
+  min-width:200px;
+}
+.querybar input{
+  background:transparent;border:none;outline:none;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;width:100%;
+}
+.querybar .icon{color:var(--faint);font-size:12px;}
+.querybar .cnt{font-size:10.5px;color:var(--faint);font-family:'IBM Plex Mono',monospace;white-space:nowrap;}
+
+.evbody{flex:1;overflow-y:auto;padding:0;background:var(--ink);}
+.evinner{padding:16px 18px;}
+
+/* narrative blocks */
+.nblock h4{margin:0 0 10px;font-family:'Space Grotesk',sans-serif;font-size:14px;color:var(--text);display:flex;align-items:center;gap:8px;}
+.nblock p{font-size:12.8px;line-height:1.65;color:var(--muted);}
+.kvgrid{display:grid;grid-template-columns:140px 1fr;gap:6px 12px;font-family:'IBM Plex Mono',monospace;font-size:12.3px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:12px;}
+.kvgrid .k{color:var(--faint);}
+.kvgrid .v{color:var(--text);}
+.flag{color:var(--critical);font-weight:600;}
+.flag-warn{color:var(--warning);font-weight:600;}
+.flag-ok{color:var(--success);font-weight:600;}
+.hl{background:rgba(240,85,90,0.16);border-bottom:1px dashed var(--critical);padding:0 2px;}
+.mitretags{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 4px;}
+.mitretag{font-family:'IBM Plex Mono',monospace;font-size:10px;background:var(--warning-dim);color:var(--warning);border:1px solid #4a3a17;padding:3px 8px;border-radius:11px;}
+
+.email-frame{border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-top:8px;}
+.email-hdr{background:var(--panel-raised);padding:10px 14px;font-size:12.3px;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;}
+.email-hdr div{margin-bottom:3px;}
+.email-hdr b{color:var(--faint);display:inline-block;width:58px;font-weight:500;}
+.email-body{padding:16px;font-size:13px;line-height:1.7;background:#0E141B;font-family:'IBM Plex Sans',sans-serif;}
+.email-body .btn-fake{display:inline-block;margin-top:10px;padding:8px 18px;background:#2255cc;color:#fff;border-radius:4px;font-size:12.5px;}
+.rawtoggle{display:inline-block;margin-top:10px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--info);cursor:pointer;border-bottom:1px dashed var(--info);}
+.rawsrc{display:none;margin-top:10px;}
+.rawsrc.show{display:block;}
+
+/* log tables */
+.logtable{width:100%;border-collapse:collapse;font-family:'IBM Plex Mono',monospace;font-size:11.3px;}
+.logtable thead th{
+  position:sticky;top:0;background:var(--panel);border-bottom:1px solid var(--border);
+  text-align:left;padding:8px 10px;color:var(--faint);font-weight:500;text-transform:uppercase;letter-spacing:0.4px;font-size:9.5px;white-space:nowrap;
+  z-index:2;
+}
+.logtable tbody tr{border-bottom:1px solid var(--border-soft);}
+.logtable tbody tr:hover{background:var(--panel-raised);}
+.logtable tbody tr.evidrow{background:var(--critical-dim);}
+.logtable tbody tr.evidrow:hover{background:#3a1a1e;}
+.logtable td{padding:5px 10px;white-space:nowrap;color:#B9C3D0;}
+.logtable td.wrap{white-space:normal;}
+.logtable td.num{color:var(--faint);}
+.chip{display:inline-block;font-size:10px;padding:1px 6px;border-radius:3px;font-weight:600;}
+.chip-fail{background:var(--critical-dim);color:var(--critical);}
+.chip-pass{background:var(--success-dim);color:var(--success);}
+.chip-warn{background:var(--warning-dim);color:var(--warning);}
+.tablewrap{overflow:auto;max-height:100%;}
+.emptyrows{padding:30px;text-align:center;color:var(--faint);font-family:'IBM Plex Mono',monospace;font-size:12px;}
+
+/* ============ QUESTION PANEL ============ */
+.qhead{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}
+.qhead .qtitle{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--muted);}
+.qhead .step{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--faint);}
+.progress-dots{display:flex;gap:5px;padding:12px 16px 0;flex-shrink:0;}
+.pdot{flex:1;height:4px;border-radius:2px;background:var(--panel-raised);}
+.pdot.done{background:var(--success);}
+.pdot.current{background:var(--info);}
+.qbody{flex:1;overflow-y:auto;padding:16px;}
+.q-title{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;margin:0 0 6px;}
+.q-sub{font-size:12.3px;color:var(--muted);margin:0 0 12px;line-height:1.55;}
+.q-meta{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;}
+textarea.ans{
+  width:100%;min-height:110px;resize:vertical;background:var(--panel);border:1px solid var(--border);
+  border-radius:8px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:13px;padding:12px 13px;line-height:1.55;outline:none;
+}
+textarea.ans:focus{border-color:var(--info);}
+.charcount{text-align:right;font-size:10.5px;color:var(--faint);font-family:'IBM Plex Mono',monospace;margin-top:4px;}
+.qfooter{padding:12px 16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:10px;flex-shrink:0;}
+.btn{
+  font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;padding:9px 16px;border-radius:7px;border:1px solid var(--border);
+  background:var(--panel-raised);color:var(--faint);cursor:not-allowed;letter-spacing:0.3px;transition:.15s;
+}
+.btn.ready{cursor:pointer;background:var(--info);color:#06131f;border-color:var(--info);}
+.btn.ready:hover{filter:brightness(1.1);}
+.btn.secondary{background:transparent;color:var(--muted);cursor:pointer;}
+.btn.secondary:hover{color:var(--text);border-color:var(--muted);}
+.answeredmark{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--success);display:flex;align-items:center;gap:5px;margin-top:8px;}
+
+/* ============ START SCREEN ============ */
+.startwrap{max-width:920px;margin:40px auto;padding:0 20px;}
+.starthero{text-align:center;margin-bottom:30px;}
+.starthero h1{font-family:'Space Grotesk',sans-serif;font-size:26px;margin-bottom:8px;}
+.starthero p{color:var(--muted);font-size:13.5px;max-width:560px;margin:0 auto;line-height:1.6;}
+.scenariogrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:24px;}
+@media(max-width:700px){.scenariogrid{grid-template-columns:1fr;}}
+.scard{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px;}
+.scard.avail{cursor:pointer;transition:.15s;}
+.scard.avail:hover{border-color:var(--info);background:var(--panel-hi);}
+.scard.locked{opacity:0.45;}
+.scard .stag{font-family:'IBM Plex Mono',monospace;font-size:9.5px;text-transform:uppercase;letter-spacing:0.8px;color:var(--faint);margin-bottom:6px;}
+.scard h3{font-family:'Space Grotesk',sans-serif;font-size:15px;margin:0 0 6px;}
+.scard p{font-size:12.3px;color:var(--muted);line-height:1.55;margin:0 0 10px;}
+.scard .meta{display:flex;gap:10px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--faint);}
+.soonpill{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:9.5px;background:var(--panel-raised);color:var(--faint);padding:2px 8px;border-radius:10px;margin-left:6px;}
+
+/* ============ REPORT ============ */
+.reportwrap{max-width:980px;margin:0 auto;padding:26px 20px 60px;}
+.rhero{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:26px;text-align:center;margin-bottom:20px;}
+.rhero .num{font-family:'Space Grotesk',sans-serif;font-size:52px;font-weight:700;line-height:1;}
+.rhero .of{font-size:13.5px;color:var(--muted);font-family:'IBM Plex Mono',monospace;margin-top:6px;}
+.rhero .grade{display:inline-block;margin-top:10px;font-family:'IBM Plex Mono',monospace;font-size:13px;padding:4px 12px;border-radius:6px;}
+.grade-A{background:var(--success-dim);color:var(--success);}
+.grade-B{background:var(--info-dim);color:var(--info);}
+.grade-C{background:var(--warning-dim);color:var(--warning);}
+.grade-D{background:var(--critical-dim);color:var(--critical);}
+.rhero .verdict{margin-top:12px;font-size:13.5px;color:var(--muted);max-width:600px;margin-left:auto;margin-right:auto;}
+
+.rsection{margin-bottom:20px;}
+.rsection h2{font-family:'Space Grotesk',sans-serif;font-size:14.5px;text-transform:uppercase;letter-spacing:0.5px;color:var(--info);margin:0 0 10px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+.ioctable{width:100%;border-collapse:collapse;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+.ioctable th{text-align:left;color:var(--faint);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;padding:6px 10px;border-bottom:1px solid var(--border);}
+.ioctable td{padding:7px 10px;border-bottom:1px solid var(--border-soft);color:var(--text);}
+.timeline{border-left:2px solid var(--border);padding-left:16px;margin-left:6px;}
+.tlitem{position:relative;padding-bottom:16px;}
+.tlitem::before{content:'';position:absolute;left:-21px;top:3px;width:8px;height:8px;border-radius:50%;background:var(--info);}
+.tlitem .tltime{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--faint);}
+.tlitem .tldesc{font-size:12.8px;color:var(--text);margin-top:2px;line-height:1.5;}
+
+.qreview{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:12px;}
+.qreview .qrhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px;}
+.qreview .qrtitle{font-family:'Space Grotesk',sans-serif;font-size:13.5px;font-weight:600;}
+.qrscore{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;padding:3px 10px;border-radius:6px;white-space:nowrap;}
+.qrscore.s-hi{background:var(--success-dim);color:var(--success);}
+.qrscore.s-mid{background:var(--warning-dim);color:var(--warning);}
+.qrscore.s-lo{background:var(--critical-dim);color:var(--critical);}
+.qreview .yourans{background:var(--ink);border:1px solid var(--border);border-radius:7px;padding:10px 12px;font-size:12.5px;color:var(--muted);line-height:1.55;margin-bottom:8px;white-space:pre-wrap;}
+.kwrow{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+.kw{font-family:'IBM Plex Mono',monospace;font-size:10.5px;padding:3px 8px;border-radius:11px;}
+.kw.hit{background:var(--success-dim);color:var(--success);}
+.kw.miss{background:var(--critical-dim);color:var(--critical);}
+.refans{font-size:12px;color:var(--faint);line-height:1.55;border-top:1px dashed var(--border);padding-top:8px;}
+.refans b{color:var(--muted);}
+
+.rfooter{text-align:center;margin-top:26px;}
+
+.hidden{display:none !important;}
+@media(max-width:980px){
+  .mainsplit{flex-direction:column;}
+  .evcol{border-right:none;border-bottom:1px solid var(--border);}
+  .app{height:auto;}
+  .tabsidebar{width:150px;}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="sq"></span>SOC TRIAGE RANGE</div>
+  <div class="crumb">Workspace: <b>corp-sentinel-prod-01</b></div>
+  <div class="crumb" id="topCrumb2"></div>
+  <div class="topbar-spacer"></div>
+  <div class="env-pill" id="clockPill">00:00 elapsed</div>
+</div>
+
+<!-- ============ START SCREEN ============ -->
+<div id="startScreen" class="startwrap">
+  <div class="starthero">
+    <h1>Case Queue</h1>
+    <p>Select an incident type to pull the next ticket from the Tier 1 queue. Evidence, log volume, and every artifact (domains, IPs, usernames, timestamps) are freshly generated for this run — nothing is scripted twice. Answers are graded on content, not multiple choice, so write triage findings the way you would in a real ticket.</p>
+  </div>
+  <div class="scenariogrid" id="scenarioGrid"></div>
+</div>
+
+<!-- ============ MAIN APP ============ -->
+<div id="mainApp" class="hidden">
+  <div class="casebar">
+    <div class="id"><span class="sub" id="caseQueueLabel">SIEM ESCALATION · QUEUE: TIER 1</span><span id="caseTitle"></span></div>
+    <div class="casebar-right">
+      <div class="stat"><div class="label">Ticket</div><div class="value" id="caseTicket">—</div></div>
+      <div class="stat"><div class="label">Case Clock</div><div class="value" id="clock">00:00</div></div>
+      <div class="sev-badge tbd" id="sevBadge">SEVERITY: TBD</div>
+    </div>
+  </div>
+
+  <div class="app">
+    <div class="railnav">
+      <div class="ricon on" title="Investigate">⌕</div>
+      <div class="ricon" title="Incidents">▤</div>
+      <div class="ricon" title="Hunting">◎</div>
+      <div class="ricon" title="Analytics">▦</div>
+      <div class="ricon" title="Workbooks">▥</div>
+    </div>
+
+    <div class="mainsplit">
+      <div class="evcol">
+        <div style="display:flex;flex:1;min-height:0;">
+          <div class="tabsidebar" id="tabSidebar"></div>
+          <div style="flex:1;display:flex;flex-direction:column;min-width:0;">
+            <div class="evheader" id="evHeader"></div>
+            <div class="evbody" id="evBody"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="qcol">
+        <div class="qhead">
+          <div class="qtitle">Triage Decision Log</div>
+          <div class="step" id="stepLabel">Q1 / 9</div>
+        </div>
+        <div class="progress-dots" id="dots"></div>
+        <div class="qbody" id="qBody"></div>
+        <div class="qfooter">
+          <button class="btn secondary" id="backBtn">Back</button>
+          <button class="btn" id="nextBtn">Save &amp; Continue</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ REPORT SCREEN ============ -->
+<div id="reportScreen" class="hidden reportwrap"></div>
+
+<script>
+/* =====================================================================
+   RNG
+   ===================================================================== */
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+let RNG = mulberry32(Date.now() % 2147483647);
+function rf(){ return RNG(); }
+function ri(a,b){ return Math.floor(rf()*(b-a+1))+a; }
+function pick(arr){ return arr[ri(0,arr.length-1)]; }
+function pickN(arr,n){ const c=[...arr]; const out=[]; for(let i=0;i<n && c.length;i++){ out.push(c.splice(ri(0,c.length-1),1)[0]); } return out; }
+function shuffle(arr){ const a=[...arr]; for(let i=a.length-1;i>0;i--){ const j=ri(0,i); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function pad(n){ return String(n).padStart(2,'0'); }
+
+/* =====================================================================
+   DATA POOLS (noise / benign backdrop)
+   ===================================================================== */
+const FIRST_NAMES = ['Alex','Jordan','Sam','Taylor','Morgan','Casey','Riley','Jamie','Drew','Dana','Chris','Robin','Avery','Quinn','Reese','Blair','Cameron','Elliot','Harper','Skyler','Emerson','Rowan','Kendall','Sawyer','Peyton','Kai','Marlowe','Sasha','Devon','Toni'];
+const LAST_NAMES = ['Ellis','Park','Nguyen','Costa','Whitfield','Marsh','Okafor','Reyes','Lindqvist','Abara','Fontaine','Brennan','Suzuki','Kowalski','Mercer','Vasquez','Dahl','Osei','Pereira','Novak','Hartley','Ibarra','Sundberg','Chatterjee','Delacroix','Voss','Amara','Rutherford','Solano','Ferraro'];
+const DEPARTMENTS = ['Accounts Payable','Human Resources','IT Operations','Sales','Legal','Marketing','Engineering','Customer Success','Procurement','Executive'];
+const ROLES = ['Specialist','Analyst','Coordinator','Manager','Senior Associate','Director','Administrator'];
+const APPS = ['Exchange Online','SharePoint Online','Teams','OneDrive','Corp VPN','Salesforce','Workday','ADFS','Power BI','Dynamics 365'];
+const DEVICE_TYPES = ['WIN11-LAPTOP','WIN10-LAPTOP','MACBOOK-PRO','WIN11-DESKTOP','SURFACE-PRO'];
+const HOME_CITIES = [
+  ['Columbus','OH','US'], ['Denver','CO','US'], ['Raleigh','NC','US'], ['Toronto','ON','CA'],
+  ['Manchester','','GB'], ['Rotterdam','','NL'], ['Austin','TX','US'], ['Kansas City','MO','US'],
+  ['Calgary','AB','CA'], ['Leeds','','GB']
+];
+const REMOTE_ISPS = ['Comcast Cable','Spectrum Business','AT&T Fiber','Bell Canada','Virgin Media','KPN Business','Charter Communications','Cox Communications'];
+const DNS_BENIGN = ['login.microsoftonline.com','outlook.office365.com','graph.microsoft.com','www.google.com','slack.com','zoom.us','salesforce.com','github.com','adobe.com','docusign.net','teams.microsoft.com','www.linkedin.com','api.dropboxapi.com','update.googleapis.com','fonts.gstatic.com','cdn.jsdelivr.net','windowsupdate.com','www.workday.com','sharepoint.com','onedrive.live.com','duckduckgo.com','www.bing.com','npmjs.org','pypi.org','s3.amazonaws.com'];
+const PROXY_CATS_BENIGN = ['Business/Productivity','Search Engines','Cloud Storage','Software Updates','Social Media (allowed)','Reference/News','Finance/Banking','Streaming Media (allowed)'];
+const PROC_BENIGN = ['outlook.exe','teams.exe','chrome.exe','explorer.exe','svchost.exe','onedrive.exe','excel.exe','winword.exe','msedge.exe','powershell.exe','searchindexer.exe','slack.exe','zoom.exe','notepad.exe','acrord32.exe'];
+const FW_ACTIONS = ['ALLOW','ALLOW','ALLOW','ALLOW','DENY'];
+const FW_BENIGN_PORTS = [443,443,443,80,53,3389,445,22];
+
+const LURE_WORDS = ['secure-helpdesk','account-verify','it-support-desk','office365-verify','password-reset-portal','secure-mailbox','helpdesk-alert','identity-confirm','365-security-check','support-verification'];
+const LURE_TLDS = ['.com','.net','.info','.online','.support','.us'];
+const COMPANIES = [
+  {name:'Meridian Financial Group', domain:'meridianfg.com'},
+  {name:'Northgate Capital Partners', domain:'northgatecapital.com'},
+  {name:'Brightpeak Industries', domain:'brightpeakind.com'},
+  {name:'Atlas Harbor Logistics', domain:'atlasharborlog.com'},
+  {name:'Sable & Rourke LLP', domain:'sablerourke.com'},
+  {name:'Corvid Health Systems', domain:'corvidhealth.com'}
+];
+const ATTACKER_GEOS = [
+  ['Bucharest','Romania'], ['Ho Chi Minh City','Vietnam'], ['Lagos','Nigeria'], ['Kyiv','Ukraine'],
+  ['Manila','Philippines'], ['Sao Paulo','Brazil'], ['Kuala Lumpur','Malaysia'], ['Sofia','Bulgaria'],
+  ['Karachi','Pakistan'], ['Warsaw','Poland'], ['Jakarta','Indonesia'], ['Chisinau','Moldova']
+];
+const VICTIM_DEPTS_TARGETED = [
+  {dept:'Accounts Payable', role:'AP Specialist'},
+  {dept:'Finance', role:'Payroll Coordinator'},
+  {dept:'Executive', role:'Executive Assistant'},
+  {dept:'Procurement', role:'Procurement Analyst'},
+  {dept:'Human Resources', role:'HR Generalist'}
+];
+const RULE_KEYWORDS = [['invoice','wire','payment'], ['remit','ACH','statement'], ['payroll','direct deposit','W-2']];
+const MANAGER_TITLES = ['Director of Finance','VP of Operations','Controller','Head of Procurement','Director of HR'];
+
+function randIP(oct1range){
+  return `${pick(oct1range)}.${ri(0,255)}.${ri(0,255)}.${ri(1,254)}`;
+}
+const CORP_SUBNET = '10.44';
+const VPN_SUBNET = '10.8';
+function corpIP(){ return `${CORP_SUBNET}.${ri(0,30)}.${ri(2,250)}`; }
+function vpnIP(){ return `${VPN_SUBNET}.${ri(0,5)}.${ri(2,250)}`; }
+function residentialIP(){ return `${ri(24,209)}.${ri(0,255)}.${ri(0,255)}.${ri(1,254)}`; }
+function attackerIPPool(){ return [ri(45,89), ri(103,196)]; } // used to build plausible "flagged" ranges
+
+function fmtDate(d){ return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`; }
+function fmtTime(d){ return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`; }
+function fmtDT(d){ return `${fmtDate(d)} ${fmtTime(d)} UTC`; }
+function addMin(d,m){ return new Date(d.getTime()+m*60000); }
+function addSec(d,s){ return new Date(d.getTime()+s*1000); }
+
+/* =====================================================================
+   CASE GENERATION (per-run "ground truth")
+   ===================================================================== */
+function buildEmployeeRoster(n, homeCityPool){
+  const roster = [];
+  const usedNames = new Set();
+  for(let i=0;i<n;i++){
+    let fn,ln,key;
+    do{ fn=pick(FIRST_NAMES); ln=pick(LAST_NAMES); key=fn+ln; } while(usedNames.has(key));
+    usedNames.add(key);
+    roster.push({
+      first:fn, last:ln,
+      username:(fn[0]+ln).toLowerCase(),
+      dept:pick(DEPARTMENTS), role:pick(ROLES),
+      home:pick(homeCityPool),
+      device:pick(DEVICE_TYPES)+'-'+ri(1000,9999),
+      corpip:corpIP()
+    });
+  }
+  return roster;
+}
+
+function makeCase(){
+  const company = pick(COMPANIES);
+  const targeted = pick(VICTIM_DEPTS_TARGETED);
+  const victimHome = pick(HOME_CITIES);
+  const roster = buildEmployeeRoster(26, HOME_CITIES);
+  let fn,ln;
+  do{ fn=pick(FIRST_NAMES); ln=pick(LAST_NAMES); } while(roster.some(r=>r.first===fn && r.last===ln));
+  const victim = {
+    first:fn, last:ln, name:`${fn} ${ln}`,
+    username:(fn[0]+ln).toLowerCase(),
+    email:`${(fn[0]+ln).toLowerCase()}@${company.domain}`,
+    dept:targeted.dept, role:targeted.role,
+    home:victimHome, device:'WIN11-LAPTOP-'+ri(1000,9999),
+    corpip:corpIP()
+  };
+  roster.push(victim);
+  const manager = { name:`${pick(FIRST_NAMES)} ${pick(LAST_NAMES)}`, title:pick(MANAGER_TITLES) };
+
+  const lureBase = pick(LURE_WORDS);
+  const lureTld = pick(LURE_TLDS);
+  const attackerDomain = lureBase + lureTld;
+  const attackerFakeSenderName = 'IT Service Desk';
+  const attackerReturnPathDomain = 'mail-delivery-' + pick(['corpsec','relay-svc','msgtransit']) + '.' + pick(['ru','cn','xyz','top']);
+  const attackerGeo = pick(ATTACKER_GEOS);
+  const attackerIPOctets = attackerIPPool();
+  const attackerIP = `${attackerIPOctets[0]}.${attackerIPOctets[1]}.${ri(0,255)}.${ri(1,254)}`;
+  const ruleKw = pick(RULE_KEYWORDS);
+  const forwardEmail = `${pick(['a.petrov','m.ionescu','r.duval','k.ibrahim','s.novak','d.andrei'])}.fin${ri(10,99)}@gmail.com`;
+  const ticket = ri(3000,9899);
+
+  // ---- timeline ----
+  const now = new Date();
+  const caseDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const emailSent = new Date(caseDay.getTime()); emailSent.setUTCHours(ri(12,15), ri(0,59), ri(0,59));
+  const emailOpened = addMin(emailSent, ri(15,50));
+  const normalLoginBefore = addMin(emailOpened, -ri(30,180)); // legit login earlier same morning
+  const anomLogin = addMin(emailOpened, ri(1,4));
+  const mfaAccept = addSec(anomLogin, ri(28,52));
+  const ruleCreated = addMin(mfaAccept, ri(2,6));
+  const sharepointAccess = addMin(ruleCreated, ri(4,12));
+  const reportedByUser = addMin(emailOpened, ri(3,9));
+  const alertFired = addMin(reportedByUser, ri(6,14));
+
+  const caseTruth = {
+    ticket, company, victim, manager, roster,
+    attackerDomain, attackerFakeSenderName, attackerReturnPathDomain, attackerGeo, attackerIP,
+    forwardEmail, ruleKw,
+    caseDay, emailSent, emailOpened, normalLoginBefore, anomLogin, mfaAccept, ruleCreated, sharepointAccess,
+    reportedByUser, alertFired,
+    subject: pick(['Action Required: Your Password Expires in 24 Hours','Urgent: Verify Your Mailbox Before Suspension','Security Notice: Unusual Sign-In Detected — Confirm Identity','IT Desk: Complete Your Office 365 Security Check']),
+    deltaMinLoginAfterEmail: Math.round((anomLogin-emailOpened)/60000)
+  };
+  return caseTruth;
+}
+
+/* =====================================================================
+   LOG GENERATORS — each returns {rows, cols, evidenceIdx:[...]}
+   ===================================================================== */
+
+// ---- 1. Sign-in / Auth Logs (Entra ID style), target ~190 rows ----
+function genSigninLogs(ct){
+  const rows = [];
+  const start = addMin(ct.caseDay, 0);
+  // benign background across the roster over ~2 days
+  const totalBenign = 168;
+  for(let i=0;i<totalBenign;i++){
+    const u = pick(ct.roster);
+    const t = addMin(ct.caseDay, ri(-1800, ri(0, 60)) + ri(-600,900)); // spread
+    const remote = rf()<0.12;
+    rows.push({
+      t, user:`${u.username}@${ct.company.domain}`, app:pick(APPS),
+      ip: remote ? residentialIP() : (rf()<0.3?vpnIP():u.corpip),
+      loc: remote ? `${pick(HOME_CITIES)[0]}, ${pick(HOME_CITIES)[2]}` : `${u.home[0]}, ${u.home[2]}`,
+      device:u.device, result:'SUCCESS', mfa:'known device (silent)', evid:false
+    });
+  }
+  // legit victim login earlier that day
+  rows.push({ t:ct.normalLoginBefore, user:ct.victim.email, app:'Corp VPN', ip:ct.victim.corpip, loc:`${ct.victim.home[0]}, ${ct.victim.home[2]}`, device:ct.victim.device, result:'SUCCESS', mfa:'known device (silent)', evid:false });
+  // a few more benign victim actions
+  rows.push({ t:addMin(ct.normalLoginBefore,22), user:ct.victim.email, app:'Exchange Online', ip:ct.victim.corpip, loc:`${ct.victim.home[0]}, ${ct.victim.home[2]}`, device:ct.victim.device, result:'SUCCESS', mfa:'-', evid:false });
+
+  // THE anomalous login — impossible travel
+  rows.push({ t:ct.anomLogin, user:ct.victim.email, app:'Exchange Online / ADFS', ip:ct.attackerIP, loc:`${ct.attackerGeo[0]}, ${ct.attackerGeo[1]}`, device:'unrecognized device', result:'SUCCESS', mfa:'push sent', evid:true, key:'anomlogin' });
+  rows.push({ t:ct.mfaAccept, user:ct.victim.email, app:'Exchange Online / ADFS', ip:ct.attackerIP, loc:`${ct.attackerGeo[0]}, ${ct.attackerGeo[1]}`, device:'unrecognized device', result:'MFA ACCEPTED', mfa:`push accepted (${Math.round((ct.mfaAccept-ct.anomLogin)/1000)}s after send)`, evid:true, key:'mfaaccept' });
+  rows.push({ t:ct.sharepointAccess, user:ct.victim.email, app:'SharePoint Online', ip:ct.attackerIP, loc:`${ct.attackerGeo[0]}, ${ct.attackerGeo[1]}`, device:'unrecognized device', result:'SUCCESS', mfa:'session token (no re-prompt)', evid:true, key:'spaccess' });
+
+  // more benign after
+  const totalBenign2 = 18;
+  for(let i=0;i<totalBenign2;i++){
+    const u = pick(ct.roster);
+    const t = addMin(ct.sharepointAccess, ri(5,300));
+    rows.push({ t, user:`${u.username}@${ct.company.domain}`, app:pick(APPS), ip:u.corpip, loc:`${u.home[0]}, ${u.home[2]}`, device:u.device, result:'SUCCESS', mfa:'known device (silent)', evid:false });
+  }
+
+  rows.sort((a,b)=>a.t-b.t);
+  return rows;
+}
+
+// ---- 2. MFA / auth method change logs, ~44 rows ----
+function genMfaLogs(ct){
+  const rows = [];
+  for(let i=0;i<38;i++){
+    const u = pick(ct.roster);
+    rows.push({ t:addMin(ct.caseDay, ri(-2000,1000)), user:`${u.username}@${ct.company.domain}`, event:pick(['MFA method re-registered (self-service)','Push notification approved','SMS OTP verified','Authenticator app re-paired']), ip:u.corpip, result:'SUCCESS' });
+  }
+  rows.push({ t:ct.mfaAccept, user:ct.victim.email, event:'Push notification approved', ip:ct.attackerIP, result:'SUCCESS', evid:true, key:'mfalog' });
+  rows.push({ t:addMin(ct.mfaAccept,1), user:ct.victim.email, event:'Sign-in risk flagged: atypical travel', ip:ct.attackerIP, result:'DETECTED (no auto-block policy)', evid:true, key:'risklfag' });
+  rows.sort((a,b)=>a.t-b.t);
+  return rows;
+}
+
+// ---- 3. Mailbox audit log, ~62 rows ----
+function genMailboxAudit(ct){
+  const rows = [];
+  const ops = ['MailItemsAccessed','MessageRead','New (calendar item)','Send (as user)','SoftDelete','FolderBind'];
+  for(let i=0;i<52;i++){
+    const u = pick(ct.roster);
+    rows.push({ t:addMin(ct.caseDay, ri(-2000,900)), user:`${u.username}@${ct.company.domain}`, op:pick(ops), item:pick(['Inbox','Calendar','Sent Items','Drafts']), client:'Outlook/Web', result:'Succeeded', evid:false });
+  }
+  rows.push({ t:addMin(ct.ruleCreated,0), user:ct.victim.email, op:'New-InboxRule', item:`Rule: "Archive-${pick(['Sync','Backup','Filter'])}"`, client:'ExO PowerShell (remote session)', result:'Succeeded', evid:true, key:'rulecreate',
+    detail:`Condition: subject/body contains ${ct.ruleKw.map(k=>'"'+k+'"').join(', ')} → Action: move to folder ".Archive.RSS", forward a copy to ${ct.forwardEmail}, mark as read` });
+  rows.push({ t:addMin(ct.ruleCreated,3), user:ct.victim.email, op:'Set-Mailbox', item:'ForwardingSmtpAddress updated (external)', client:'ExO PowerShell (remote session)', result:'Succeeded', evid:true, key:'setforward', detail:`Target: ${ct.forwardEmail}` });
+  rows.push({ t:addMin(ct.ruleCreated,6), user:ct.victim.email, op:'MailItemsAccessed', item:'Inbox (bulk sync, 40+ items)', client:'ExO REST (unrecognized app)', result:'Succeeded', evid:true, key:'bulkaccess' });
+  rows.sort((a,b)=>a.t-b.t);
+  return rows;
+}
+
+// ---- 4. Mail flow / gateway logs, ~150 rows ----
+function genMailflow(ct){
+  const rows = [];
+  const domainsBenign = ['vendor-invoicing.com','partnerbank.com','docusign.net','linkedin.com','notifications.slack.com','calendar.google.com','news.bloomberg.com','updates.adobe.com'];
+  for(let i=0;i<140;i++){
+    const u = pick(ct.roster);
+    const inbound = rf()<0.6;
+    rows.push({
+      t:addMin(ct.caseDay, ri(-2000,900)),
+      from: inbound ? `noreply@${pick(domainsBenign)}` : `${u.username}@${ct.company.domain}`,
+      to: inbound ? `${u.username}@${ct.company.domain}` : `contact@${pick(domainsBenign)}`,
+      subject: pick(['Q3 vendor statement attached','Meeting notes: weekly sync','Your DocuSign envelope','Calendar invite: Budget review','LinkedIn: 3 new connections','Slack: daily digest','Adobe: your subscription receipt']),
+      spf:'pass', dkim:'pass', dmarc:'pass', verdict:'Clean', evid:false
+    });
+  }
+  rows.push({ t:ct.emailSent, from:`${ct.attackerFakeSenderName} <it-support@${ct.attackerDomain}>`, to:ct.victim.email, subject:ct.subject, spf:'fail', dkim:'none', dmarc:'fail', verdict:'Delivered (user reported)', evid:true, key:'phishmail' });
+  rows.sort((a,b)=>a.t-b.t);
+  return rows;
+}
+
+// ---- 5. DNS query logs, ~150 rows ----
+function genDnsLogs(ct){
+  const rows = [];
+  for(let i=0;i<142;i++){
+    const u = pick(ct.roster);
+    rows.push({ t:addMin(ct.caseDay, ri(-2000,900)), host:u.device, srcip:u.corpip, qname:pick(DNS_BENIGN), qtype:'A', answer:'resolved', evid:false });
+  }
+  rows.push({ t:addMin(ct.emailOpened,0), host:ct.victim.device, srcip:ct.victim.corpip, qname:ct.attackerDomain, qtype:'A', answer:`resolved → ${ct.attackerIP}`, evid:true, key:'dnslookup' });
+  rows.push({ t:addMin(ct.emailOpened,1), host:ct.victim.device, srcip:ct.victim.corpip, qname:'mx1.'+ct.attackerDomain, qtype:'A', answer:`resolved → ${ct.attackerIP}`, evid:true, key:'dnslookup2' });
+  rows.sort((a,b)=>a.t-b.t);
+  return rows;
+}
+
+// ---- 6. Proxy / web logs, ~150 rows ----
+function genProxyLogs(ct){
+  const rows = [];
+  for(let i=0;i<143;i++){
+    const u = pick(ct.roster);
+    rows.push({ t:addMin(ct.caseDay, ri(-2000,900)), user:u.username, srcip:u.corpip, url:'https://'+pick(DNS_BENIGN)+pick(['/','/home','/dashboard','/api/v1/sync']), category:pick(PROXY_CATS_BENIGN), action:'ALLOW', bytes:ri(800,90000), evid:false });
+  }
+  rows.push({ t:addMin(ct.emailOpened,0), user:ct.victim.username, srcip:ct.victim.corpip, url:`https://${ct.attackerDomain}/reset?u=${ct.victim.username}`, category:'Phishing (uncategorized at time of visit)', action:'ALLOW', bytes:14220, evid:true, key:'proxyclick' });
+  rows.push({ t:addMin(ct.emailOpened,1), user:ct.victim.username, srcip:ct.victim.corpip, url:`https://${ct.attackerDomain}/login-capture`, category:'Phishing (uncategorized at time of visit)', action:'ALLOW', bytes:3110, evid:true, key:'proxypost' });
+  rows.sort((a,b)=>a.t-b.t);
+  return rows;
+}
+
+// ---- 7. Firewall / network connection logs, ~120 rows ----
+function genFirewallLogs(ct){
+  const rows = [];
+  for(let i=0;i<112;i++){
+    const u = pick(ct.roster);
+    rows.push({ t:addMin(ct.caseDay, ri(-2000,900)), src:u.corpip, dst:randIP([13,52,104,142,172]), dport:pick(FW_BENIGN_PORTS), proto:'TCP', action:pick(FW_ACTIONS), bytes:ri(500,200000), evid:false });
+  }
+  rows.push({ t:addMin(ct.emailOpened,0), src:ct.victim.corpip, dst:ct.attackerIP, dport:443, proto:'TCP', action:'ALLOW', bytes:17840, evid:true, key:'fwout' });
+  rows.push({ t:addMin(ct.sharepointAccess,20), src:ct.attackerIP, dst:corpIP(), dport:443, proto:'TCP', action:'ALLOW (cloud egress — no perimeter visibility of attacker source)', bytes:0, evid:true, key:'fwnote' });
+  rows.sort((a,b)=>a.t-b.t);
+  return rows;
+}
+
+// ---- 8. EDR / process execution logs on victim's laptop, ~104 rows ----
+function genEdrLogs(ct){
+  const rows = [];
+  for(let i=0;i<98;i++){
+    rows.push({ t:addMin(ct.caseDay, ri(-2000,900)), host:ct.victim.device, proc:pick(PROC_BENIGN), parent:pick(['explorer.exe','services.exe','svchost.exe']), user:ct.victim.username, verdict:'Benign', evid:false });
+  }
+  rows.push({ t:addMin(ct.emailOpened,0), host:ct.victim.device, proc:'msedge.exe', parent:'outlook.exe', user:ct.victim.username, verdict:'Benign (browser nav — credential entry, no payload executed)', evid:true, key:'edrnav' });
+  rows.push({ t:addMin(ct.sharepointAccess,90), host:ct.victim.device, proc:'MsSense.exe', parent:'services.exe', user:'SYSTEM', verdict:'EDR sweep: no malicious binaries, no persistence mechanisms, no lateral movement tooling found on host', evid:true, key:'edrsweep' });
+  rows.sort((a,b)=>a.t-b.t);
+  return rows;
+}
+
+/* =====================================================================
+   NARRATIVE TAB CONTENT (built per-case)
+   ===================================================================== */
+function renderAlertTab(ct){
+  return `<div class="nblock">
+    <h4>Correlation Alert — <span class="flag">Impossible Travel + New Device + Mailbox Rule</span></h4>
+    <div class="mitretags">
+      <span class="mitretag">T1566.002 Phishing: Link</span>
+      <span class="mitretag">T1078 Valid Accounts</span>
+      <span class="mitretag">T1114.003 Email Forwarding Rule</span>
+      <span class="mitretag">T1621 MFA Request Generation</span>
+    </div>
+    <div class="kvgrid">
+      <div class="k">Alert ID</div><div class="v">SENT-${ri(70000,99999)}</div>
+      <div class="k">Rule name</div><div class="v">Impossible Travel (sign-in velocity) + New Inbox Rule Correlation</div>
+      <div class="k">User</div><div class="v">${ct.victim.email} (${ct.victim.name}, ${ct.victim.role})</div>
+      <div class="k">Trigger</div><div class="v">2 successful sign-ins, ${ct.deltaMinLoginAfterEmail+ri(0,3)} min apart, geographically implausible distance</div>
+      <div class="k">Related signal</div><div class="v">User submitted "Report Phishing" ${Math.round((ct.reportedByUser-ct.emailOpened)/60000)} min before this alert fired</div>
+      <div class="k">Asset</div><div class="v">${ct.victim.device} (managed, non-VIP)</div>
+      <div class="k">Auto priority</div><div class="v flag-warn">Medium (auto) — pending Tier 1 review</div>
+    </div>
+    <p>This alert fired because it correlates a user-reported phishing email with a sign-in velocity anomaly and a new inbox rule on the same mailbox within minutes of each other. Review every evidence tab in the left rail before making your triage calls — nothing here is fully conclusive on its own.</p>
+  </div>`;
+}
+
+function renderEmailTab(ct){
+  const raw = `Return-Path:  <bounce@${ct.attackerReturnPathDomain}>
+From:         "${ct.attackerFakeSenderName}" <it-support@${ct.attackerDomain}>
+Reply-To:     helpdesk.reply@${ct.attackerDomain}
+To:           ${ct.victim.email}
+Date:         ${fmtDT(ct.emailSent)}
+Subject:      ${ct.subject}
+Received:     from mx1.${ct.attackerDomain} (${ct.attackerIP})
+              by mx-in.${ct.company.domain} with ESMTPS`;
+  return `<div class="nblock">
+    <h4>Message reported by ${ct.victim.name} via "Report Phishing" button</h4>
+    <div class="email-frame">
+      <div class="email-hdr">
+        <div><b>From:</b> ${ct.attackerFakeSenderName} &lt;it-support@${ct.attackerDomain}&gt;</div>
+        <div><b>To:</b> ${ct.victim.email}</div>
+        <div><b>Subject:</b> ${ct.subject}</div>
+      </div>
+      <div class="email-body">
+        <p>Dear ${ct.victim.first},</p>
+        <p>Our records show your network password will <span class="hl">expire within 24 hours</span>. To avoid losing access to your mailbox and finance systems, please verify your credentials immediately using the secure link below.</p>
+        <p><span class="btn-fake">Verify My Password</span></p>
+        <p style="font-size:11.5px;color:#7d8896;">Link target (hover-text, defanged): hxxps://${ct.attackerDomain}/reset?u=${ct.victim.username}</p>
+        <p>Failure to act within 24 hours will result in <span class="hl">automatic account suspension</span>.</p>
+        <p>IT Service Desk<br>${ct.company.name}</p>
+      </div>
+    </div>
+    <span class="rawtoggle" onclick="this.nextElementSibling.classList.toggle('show')">▸ view raw source</span>
+    <div class="rawsrc mono" style="background:#0b0f14;border:1px solid var(--border);border-radius:6px;padding:12px 14px;font-size:11.5px;white-space:pre;overflow-x:auto;">${raw}</div>
+    <p style="margin-top:12px;">The organization's real domain is <b>${ct.company.domain}</b>. Compare it carefully to the sender domain above.</p>
+  </div>`;
+}
+
+function renderHeadersTab(ct){
+  return `<div class="nblock">
+    <h4>Authentication results (message trace)</h4>
+    <div class="kvgrid">
+      <div class="k">Return-Path</div><div class="v">bounce@${ct.attackerReturnPathDomain}</div>
+      <div class="k">From domain</div><div class="v">${ct.attackerDomain}</div>
+      <div class="k">Reply-To</div><div class="v">helpdesk.reply@${ct.attackerDomain}</div>
+      <div class="k">Receiving IP</div><div class="v">${ct.attackerIP}</div>
+      <div class="k">SPF</div><div class="v"><span class="chip chip-fail">spf=fail</span></div>
+      <div class="k">DKIM</div><div class="v"><span class="chip chip-fail">dkim=none</span></div>
+      <div class="k">DMARC</div><div class="v"><span class="chip chip-fail">dmarc=fail</span></div>
+      <div class="k">Sending IP reputation</div><div class="v flag">Flagged — seen in ${ri(6,22)} phishing campaigns (last 30d)</div>
+    </div>
+    <p>Return-Path domain, sender domain, and reply-to domain all differ from each other and from ${ct.company.domain}. All three authentication checks fail.</p>
+  </div>`;
+}
+
+function renderThreatIntelTab(ct){
+  return `<div class="nblock">
+    <h4>Threat intelligence lookup</h4>
+    <div class="kvgrid">
+      <div class="k">Domain</div><div class="v">${ct.attackerDomain}</div>
+      <div class="k">Domain age</div><div class="v flag">${ri(3,29)} days</div>
+      <div class="k">Registrar</div><div class="v">${pick(['NameSilo LLC','Namecheap Inc.','PDR Ltd.','Dynadot LLC'])}</div>
+      <div class="k">Categorization</div><div class="v flag">Phishing / Credential Harvesting (community-reported)</div>
+      <div class="k">Hosting IP</div><div class="v">${ct.attackerIP}</div>
+      <div class="k">IP ASN</div><div class="v">${pick(['AS14061 DigitalOcean','AS16509 Amazon','AS24940 Hetzner','AS20473 Choopa/Vultr'])}</div>
+      <div class="k">Geo (hosting)</div><div class="v">${ct.attackerGeo[0]}, ${ct.attackerGeo[1]}</div>
+      <div class="k">Similar campaigns</div><div class="v">${ri(4,19)} near-identical lookalike domains registered in past ${ri(2,6)} weeks, same template</div>
+      <div class="k">Vendor detections</div><div class="v flag">${ri(11,34)}/90 (phishing/malicious)</div>
+    </div>
+    <p>The lure domain is recently registered and already community-flagged for credential harvesting, consistent with a disposable phishing kit rather than a compromised legitimate site.</p>
+  </div>`;
+}
+
+function renderCmdbTab(ct){
+  return `<div class="nblock">
+    <h4>Asset record — ${ct.victim.device}</h4>
+    <div class="kvgrid">
+      <div class="k">Owner</div><div class="v">${ct.victim.name} (${ct.victim.email})</div>
+      <div class="k">Department</div><div class="v">${ct.victim.dept}</div>
+      <div class="k">Criticality</div><div class="v">Standard (non-VIP, non-privileged)</div>
+      <div class="k">OS</div><div class="v">Windows 11 Enterprise, build ${ri(22621,26100)}</div>
+      <div class="k">EDR agent</div><div class="v flag-ok">Installed, last check-in ${ri(1,9)} min ago</div>
+      <div class="k">Patch status</div><div class="v flag-ok">Compliant (last scan ${fmtDate(addMin(ct.caseDay,-ri(60,300)))})</div>
+      <div class="k">Local admin rights</div><div class="v">None (standard user)</div>
+      <div class="k">Encryption</div><div class="v flag-ok">BitLocker enabled</div>
+    </div>
+    <p>Endpoint posture is healthy and unprivileged — consistent with a credential-phishing pathway rather than local malware, and this shapes how aggressively you need to treat the endpoint itself versus the identity.</p>
+  </div>`;
+}
+
+function renderInterviewTab(ct){
+  return `<div class="nblock">
+    <h4>Analyst call with ${ct.victim.name} (transcript excerpt)</h4>
+    <div class="kvgrid" style="grid-template-columns:1fr;font-family:'IBM Plex Sans',sans-serif;font-size:12.8px;line-height:1.7;">
+      <div class="v">"I got that password-expiry email around ${fmtTime(ct.emailSent).slice(0,5)} and clicked the link because I was worried about losing access before a deadline. It took me to a login page that looked normal, so I typed my username and password, then approved a push notification because I figured it was just confirming the reset.<br><br>
+      I did NOT create any mailbox rule. I don't recognize the forwarding address in your logs. I'm still logged into my laptop right now in ${ct.victim.home[0]}."</div>
+    </div>
+    <p>${ct.victim.first.split(' ')[0]} confirms entering credentials on the linked page and approving an MFA push without fully reading it, then denies creating the forwarding rule.</p>
+  </div>`;
+}
+
+function renderOrgTab(ct){
+  return `<div class="nblock">
+    <h4>Org context</h4>
+    <div class="kvgrid">
+      <div class="k">Employee</div><div class="v">${ct.victim.name}</div>
+      <div class="k">Title</div><div class="v">${ct.victim.role}, ${ct.victim.dept}</div>
+      <div class="k">Manager</div><div class="v">${ct.manager.name}, ${ct.manager.title}</div>
+      <div class="k">Mailbox scope</div><div class="v">Handles vendor invoices, wire approvals, and payment remittance correspondence</div>
+      <div class="k">Access</div><div class="v">Finance SharePoint site, AP shared mailbox (delegate), banking portal (view-only)</div>
+    </div>
+    <p>This mailbox regularly handles payment and invoice correspondence — relevant context for how you weigh the forwarding rule you found in the mailbox audit log.</p>
+  </div>`;
+}
+
+/* =====================================================================
+   LOG TABLE RENDERING
+   ===================================================================== */
+function tableHTML(id, cols, rows, rowFn){
+  const body = rows.map(rowFn).join('');
+  return `<div class="tablewrap"><table class="logtable" id="tbl-${id}">
+    <thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+    <tbody>${body}</tbody>
+  </table></div>`;
+}
+
+/* =====================================================================
+   TAB DEFINITIONS
+   ===================================================================== */
+let CASE = null;
+let TABS = [];
+
+function buildTabs(ct){
+  const signin = genSigninLogs(ct);
+  const mfa = genMfaLogs(ct);
+  const mbx = genMailboxAudit(ct);
+  const mail = genMailflow(ct);
+  const dns = genDnsLogs(ct);
+  const proxy = genProxyLogs(ct);
+  const fw = genFirewallLogs(ct);
+  const edr = genEdrLogs(ct);
+
+  return [
+    { id:'alert', label:'SIEM Alert', group:'Overview', type:'narrative', count:1, render:()=>renderAlertTab(ct) },
+    { id:'email', label:'Reported Email', group:'Overview', type:'narrative', count:1, render:()=>renderEmailTab(ct) },
+    { id:'headers', label:'Message Headers', group:'Overview', type:'narrative', count:1, render:()=>renderHeadersTab(ct) },
+    { id:'signin', label:'Sign-In Logs', group:'Identity', type:'log', count:signin.length, data:signin,
+      cols:['Time (UTC)','User','App','Source IP','Location','Device','Result','MFA'],
+      rowFn:r=>`<tr class="${r.evid?'evidrow':''}"><td class="num">${fmtDT(r.t)}</td><td>${r.user}</td><td>${r.app}</td><td>${r.ip}</td><td class="wrap">${r.loc}</td><td>${r.device}</td><td>${r.result==='SUCCESS'?'<span class=\"chip chip-pass\">SUCCESS</span>':'<span class=\"chip chip-warn\">'+r.result+'</span>'}</td><td class="wrap">${r.mfa}</td></tr>`,
+      search:r=>`${r.user} ${r.app} ${r.ip} ${r.loc} ${r.device} ${r.result} ${r.mfa}` },
+    { id:'mfa', label:'MFA / Auth Events', group:'Identity', type:'log', count:mfa.length, data:mfa,
+      cols:['Time (UTC)','User','Event','Source IP','Result'],
+      rowFn:r=>`<tr class="${r.evid?'evidrow':''}"><td class="num">${fmtDT(r.t)}</td><td>${r.user}</td><td class="wrap">${r.event}</td><td>${r.ip}</td><td>${r.result}</td></tr>`,
+      search:r=>`${r.user} ${r.event} ${r.ip} ${r.result}` },
+    { id:'mbxaudit', label:'Mailbox Audit Log', group:'Identity', type:'log', count:mbx.length, data:mbx,
+      cols:['Time (UTC)','User','Operation','Item','Client','Result'],
+      rowFn:r=>`<tr class="${r.evid?'evidrow':''}"><td class="num">${fmtDT(r.t)}</td><td>${r.user}</td><td>${r.op}</td><td class="wrap">${r.item}${r.detail?'<br><span style=\"color:var(--faint);font-size:10.5px;\">'+r.detail+'</span>':''}</td><td class="wrap">${r.client}</td><td>${r.result}</td></tr>`,
+      search:r=>`${r.user} ${r.op} ${r.item} ${r.client} ${r.result} ${r.detail||''}` },
+    { id:'mailflow', label:'Mail Flow / Gateway', group:'Network', type:'log', count:mail.length, data:mail,
+      cols:['Time (UTC)','From','To','Subject','SPF','DKIM','DMARC','Verdict'],
+      rowFn:r=>`<tr class="${r.evid?'evidrow':''}"><td class="num">${fmtDT(r.t)}</td><td class="wrap">${r.from}</td><td class="wrap">${r.to}</td><td class="wrap">${r.subject}</td><td>${r.spf==='fail'?'<span class=\"chip chip-fail\">fail</span>':'<span class=\"chip chip-pass\">pass</span>'}</td><td>${r.dkim==='none'?'<span class=\"chip chip-fail\">none</span>':'<span class=\"chip chip-pass\">pass</span>'}</td><td>${r.dmarc==='fail'?'<span class=\"chip chip-fail\">fail</span>':'<span class=\"chip chip-pass\">pass</span>'}</td><td class="wrap">${r.verdict}</td></tr>`,
+      search:r=>`${r.from} ${r.to} ${r.subject} ${r.verdict}` },
+    { id:'dns', label:'DNS Query Logs', group:'Network', type:'log', count:dns.length, data:dns,
+      cols:['Time (UTC)','Host','Source IP','Query','Type','Answer'],
+      rowFn:r=>`<tr class="${r.evid?'evidrow':''}"><td class="num">${fmtDT(r.t)}</td><td>${r.host}</td><td>${r.srcip}</td><td class="wrap">${r.qname}</td><td>${r.qtype}</td><td class="wrap">${r.answer}</td></tr>`,
+      search:r=>`${r.host} ${r.srcip} ${r.qname} ${r.answer}` },
+    { id:'proxy', label:'Web Proxy Logs', group:'Network', type:'log', count:proxy.length, data:proxy,
+      cols:['Time (UTC)','User','Source IP','URL','Category','Action','Bytes'],
+      rowFn:r=>`<tr class="${r.evid?'evidrow':''}"><td class="num">${fmtDT(r.t)}</td><td>${r.user}</td><td>${r.srcip}</td><td class="wrap">${r.url}</td><td class="wrap">${r.category}</td><td>${r.action==='ALLOW'?'<span class=\"chip chip-pass\">ALLOW</span>':'<span class=\"chip chip-fail\">'+r.action+'</span>'}</td><td class="num">${r.bytes}</td></tr>`,
+      search:r=>`${r.user} ${r.srcip} ${r.url} ${r.category}` },
+    { id:'firewall', label:'Firewall / NetFlow', group:'Network', type:'log', count:fw.length, data:fw,
+      cols:['Time (UTC)','Src IP','Dst IP','Dst Port','Proto','Action','Bytes'],
+      rowFn:r=>`<tr class="${r.evid?'evidrow':''}"><td class="num">${fmtDT(r.t)}</td><td>${r.src}</td><td>${r.dst}</td><td class="num">${r.dport}</td><td>${r.proto}</td><td>${r.action.startsWith('ALLOW')?'<span class=\"chip chip-pass\">ALLOW</span>':'<span class=\"chip chip-fail\">DENY</span>'}${r.action.includes('(')?'<br><span style=\"color:var(--faint);font-size:10px;\">'+r.action.slice(r.action.indexOf('(')) +'</span>':''}</td><td class="num">${r.bytes}</td></tr>`,
+      search:r=>`${r.src} ${r.dst} ${r.dport} ${r.proto} ${r.action}` },
+    { id:'edr', label:'EDR Process Log', group:'Endpoint', type:'log', count:edr.length, data:edr,
+      cols:['Time (UTC)','Host','Process','Parent','User','Verdict'],
+      rowFn:r=>`<tr class="${r.evid?'evidrow':''}"><td class="num">${fmtDT(r.t)}</td><td>${r.host}</td><td>${r.proc}</td><td>${r.parent}</td><td>${r.user}</td><td class="wrap">${r.verdict}</td></tr>`,
+      search:r=>`${r.host} ${r.proc} ${r.parent} ${r.user} ${r.verdict}` },
+    { id:'cmdb', label:'Asset / CMDB', group:'Endpoint', type:'narrative', count:1, render:()=>renderCmdbTab(ct) },
+    { id:'intel', label:'Threat Intel Lookup', group:'Context', type:'narrative', count:1, render:()=>renderThreatIntelTab(ct) },
+    { id:'interview', label:'User Interview', group:'Context', type:'narrative', count:1, render:()=>renderInterviewTab(ct) },
+    { id:'org', label:'Org Context', group:'Context', type:'narrative', count:1, render:()=>renderOrgTab(ct) }
+  ];
+}
+
+/* =====================================================================
+   QUESTIONS (grading keys generated per-case)
+   ===================================================================== */
+function norm(s){
+  return (s||'').toLowerCase()
+    .replace(/hxxps?/g,'http').replace(/\[\.\]/g,'.').replace(/\(\.\)/g,'.')
+    .replace(/\s+/g,' ').trim();
+}
+function contains(hay, needle){ return norm(hay).includes(norm(needle)); }
+
+function buildQuestions(ct){
+  return [
+    {
+      id:'q1', title:'Q1 — Attacker Infrastructure', meta:'Identification',
+      sub:'What is the exact sender domain used in the phishing email? Give the domain only.',
+      grade:(ans)=>{
+        const hit = contains(ans, ct.attackerDomain);
+        return { score: hit?100:0, keywords:[{label:ct.attackerDomain, hit}], reference:`The message was sent from ${ct.attackerDomain}, a recently-registered lookalike domain.` };
+      }
+    },
+    {
+      id:'q2', title:'Q2 — Impersonated Brand', meta:'Identification',
+      sub:`What is ${ct.company.name}'s real, legitimate domain that this email is impersonating?`,
+      grade:(ans)=>{
+        const hit = contains(ans, ct.company.domain);
+        return { score: hit?100:0, keywords:[{label:ct.company.domain, hit}], reference:`The organization's actual domain is ${ct.company.domain}.` };
+      }
+    },
+    {
+      id:'q3', title:'Q3 — Email Authentication', meta:'Evidence Analysis',
+      sub:'Which email authentication checks failed on this message? Name all that apply (check the Message Headers tab).',
+      grade:(ans)=>{
+        const kws = [{label:'SPF',v:'spf'},{label:'DKIM',v:'dkim'},{label:'DMARC',v:'dmarc'}];
+        const results = kws.map(k=>({label:k.label, hit:contains(ans,k.v)}));
+        const hits = results.filter(r=>r.hit).length;
+        return { score: Math.round(hits/3*100), keywords:results, reference:'SPF, DKIM, and DMARC all failed on this message — a strong spoofing indicator.' };
+      }
+    },
+    {
+      id:'q4', title:'Q4 — Compromised Identity', meta:'Evidence Analysis',
+      sub:'Which user account shows evidence of compromise? Give the username or email address.',
+      grade:(ans)=>{
+        const hit = contains(ans, ct.victim.username) || contains(ans, ct.victim.email);
+        return { score: hit?100:0, keywords:[{label:ct.victim.email, hit}], reference:`${ct.victim.email} shows the anomalous sign-in, MFA acceptance, and mailbox rule.` };
+      }
+    },
+    {
+      id:'q5', title:'Q5 — Anomalous Sign-In', meta:'Correlation',
+      sub:'Where did the unauthorized sign-in originate (city and/or country), and roughly how many minutes after the email was opened did it occur? Check the Sign-In Logs tab.',
+      grade:(ans)=>{
+        const locHit = contains(ans, ct.attackerGeo[0]) || contains(ans, ct.attackerGeo[1]);
+        const delta = ct.deltaMinLoginAfterEmail;
+        const deltaCandidates = [Math.max(0,delta-2), Math.max(0,delta-1), delta, delta+1, delta+2];
+        const timeHit = deltaCandidates.some(n=>new RegExp('(^|[^0-9])'+n+'([^0-9]|$)').test(norm(ans))) || contains(ans,'minute');
+        return { score: Math.round(((locHit?1:0)+(timeHit?1:0))/2*100),
+          keywords:[{label:`${ct.attackerGeo[0]}, ${ct.attackerGeo[1]}`, hit:locHit},{label:`~${delta} min after email opened`, hit:timeHit}],
+          reference:`The sign-in came from ${ct.attackerGeo[0]}, ${ct.attackerGeo[1]}, about ${delta} minutes after the email was opened — a physically impossible travel gap from the user's home location.` };
+      }
+    },
+    {
+      id:'q6', title:'Q6 — Mailbox Persistence', meta:'Evidence Analysis',
+      sub:'What malicious mailbox rule or external forwarding address was configured on the compromised mailbox? Check the Mailbox Audit Log tab.',
+      grade:(ans)=>{
+        const hit = contains(ans, ct.forwardEmail);
+        return { score: hit?100:0, keywords:[{label:ct.forwardEmail, hit}], reference:`A rule was created that forwards messages matching payment/invoice keywords to ${ct.forwardEmail}.` };
+      }
+    },
+    {
+      id:'q7', title:'Q7 — Immediate Containment', meta:'Response',
+      sub:'List the immediate containment actions you would take right now, before deep forensics. Write them as a short list.',
+      grade:(ans)=>{
+        const items = [
+          {label:'Disable account / force sign-out', pats:['disable','suspend','sign out','sign-out','revoke session']},
+          {label:'Reset password', pats:['reset password','password reset','reset the password']},
+          {label:'Revoke MFA / trusted devices', pats:['revoke mfa','mfa reset','revoke token','remove trusted device','re-register mfa','reset mfa']},
+          {label:'Remove malicious mailbox rule (preserve evidence)', pats:['remove rule','delete rule','disable rule','mailbox rule']},
+          {label:'Block sender domain / malicious IP or URL', pats:['block domain','block ip','block url','block the domain','block sender']}
+        ];
+        const results = items.map(it=>({label:it.label, hit:it.pats.some(p=>contains(ans,p))}));
+        const hits = results.filter(r=>r.hit).length;
+        return { score: Math.round(hits/items.length*100), keywords:results, reference:'Disable/sign-out the account, reset the password, revoke MFA/trusted devices, remove the mailbox rule (after preserving it as evidence), and block the sender domain/IP at the gateway and proxy.' };
+      }
+    },
+    {
+      id:'q8', title:'Q8 — Severity & Escalation', meta:'Decision',
+      sub:'What severity would you assign, and where does this ticket get escalated? Justify briefly.',
+      grade:(ans)=>{
+        const items = [
+          {label:'High severity', pats:['high']},
+          {label:'BEC / Business Email Compromise', pats:['bec','business email compromise']},
+          {label:'Escalate to IR / Tier 2', pats:['incident response',' ir ','ir team','tier 2','tier2']},
+          {label:'Notify Finance / business owner', pats:['finance']}
+        ];
+        const results = items.map(it=>({label:it.label, hit:it.pats.some(p=>contains(' '+ans+' ',p))}));
+        const hits = results.filter(r=>r.hit).length;
+        return { score: Math.round(hits/items.length*100), keywords:results, reference:'This is a confirmed BEC precursor: High severity, escalate to Tier 2/Incident Response, and notify Finance leadership given the payment-themed forwarding rule.' };
+      }
+    },
+    {
+      id:'q9', title:'Q9 — Ticket Documentation', meta:'Reporting',
+      sub:'Write the final ticket summary you would hand off: cover the IOCs, timeline, actions taken, and escalation rationale in a few sentences.',
+      grade:(ans)=>{
+        const items = [
+          {label:'Attacker domain', pats:[ct.attackerDomain]},
+          {label:'Compromised user', pats:[ct.victim.username, ct.victim.email]},
+          {label:'Anomalous login location', pats:[ct.attackerGeo[0], ct.attackerGeo[1]]},
+          {label:'Forwarding address', pats:[ct.forwardEmail]},
+          {label:'Containment action taken', pats:['disable','reset','revoke','block','remove']},
+          {label:'Escalation / severity', pats:['high','ir','tier 2','bec']}
+        ];
+        const results = items.map(it=>({label:it.label, hit:it.pats.some(p=>contains(ans,p))}));
+        const hits = results.filter(r=>r.hit).length;
+        return { score: Math.round(hits/items.length*100), keywords:results, reference:'A complete handoff ticket names every IOC (domain, IP/geo, forwarding address, affected account), the timeline, containment actions taken, and the escalation rationale — so Tier 2/IR or a later audit never has to ask "why was this High severity?"' };
+      }
+    }
+  ];
+}
+
+/* =====================================================================
+   STATE
+   ===================================================================== */
+let TABS_BY_ID = {};
+let activeTabId = null;
+let viewedTabs = new Set();
+let QUESTIONS = [];
+let currentQ = 0;
+let answers = []; // {text, submitted}
+let startTime = null;
+let clockInterval = null;
+let searchTerms = {};
+
+/* =====================================================================
+   SCENARIO SELECT SCREEN
+   ===================================================================== */
+const SCENARIOS = [
+  { id:'phish_bec', name:'Phishing-Initiated BEC / Credential Compromise', tag:'AVAILABLE', desc:'A user-reported phishing email correlates with an impossible-travel sign-in, an accepted MFA push, and a payment-themed mailbox forwarding rule. Triage the chain end to end.', evtabs:14, logrows:'~950', qs:9, avail:true },
+  { id:'ransomware_precursor', name:'Ransomware Precursor / Lateral Movement', tag:'COMING SOON', desc:'Suspicious LSASS access, new scheduled tasks, and SMB lateral movement across three hosts ahead of encryption.', evtabs:'12–15', logrows:'~1000', qs:'8–10', avail:false },
+  { id:'insider_exfil', name:'Insider Data Exfiltration', tag:'COMING SOON', desc:"A departing employee's cloud storage sync and USB activity in the two weeks before their last day.", evtabs:'10–13', logrows:'~900', qs:'8–10', avail:false },
+  { id:'cloud_misconfig', name:'Cloud Storage Misconfiguration Exposure', tag:'COMING SOON', desc:'A public S3-style bucket, scanner traffic, and the question of what was actually accessed before remediation.', evtabs:'10–12', logrows:'~800', qs:'7–9', avail:false }
+];
+
+function renderScenarioGrid(){
+  const grid = document.getElementById('scenarioGrid');
+  grid.innerHTML = SCENARIOS.map(s=>`
+    <div class="scard ${s.avail?'avail':'locked'}" data-id="${s.id}">
+      <div class="stag">${s.tag}</div>
+      <h3>${s.name}</h3>
+      <p>${s.desc}</p>
+      <div class="meta"><span>${s.evtabs} evidence tabs</span><span>·</span><span>${s.logrows} log rows</span><span>·</span><span>${s.qs} questions</span></div>
+    </div>`).join('');
+  [...grid.querySelectorAll('.scard.avail')].forEach(el=>{
+    el.addEventListener('click',()=>startCase(el.dataset.id));
+  });
+}
+
+function startCase(scenarioId){
+  RNG = mulberry32((Date.now() ^ (Math.random()*1e9)) % 2147483647);
+  CASE = makeCase();
+  TABS = buildTabs(CASE);
+  TABS_BY_ID = {}; TABS.forEach(t=>TABS_BY_ID[t.id]=t);
+  activeTabId = TABS[0].id;
+  viewedTabs = new Set([activeTabId]);
+  QUESTIONS = buildQuestions(CASE);
+  currentQ = 0;
+  answers = QUESTIONS.map(()=>({text:'', submitted:false}));
+  searchTerms = {};
+  startTime = Date.now();
+
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('mainApp').classList.remove('hidden');
+  document.getElementById('caseTitle').textContent = `TICKET #${CASE.ticket} — Anomalous Login Following Reported Phishing Email`;
+  document.getElementById('caseTicket').textContent = '#'+CASE.ticket;
+  document.getElementById('topCrumb2').innerHTML = `Case: <b>${CASE.company.name}</b>`;
+
+  renderTabSidebar();
+  renderEvidence();
+  renderQuestion();
+  if(clockInterval) clearInterval(clockInterval);
+  clockInterval = setInterval(tickClock,1000);
+}
+
+/* =====================================================================
+   RENDER: EVIDENCE
+   ===================================================================== */
+function renderTabSidebar(){
+  const groups = {};
+  TABS.forEach(t=>{ (groups[t.group]=groups[t.group]||[]).push(t); });
+  let html = '';
+  Object.keys(groups).forEach(g=>{
+    html += `<div class="grp-label">${g}</div>`;
+    groups[g].forEach(t=>{
+      html += `<div class="tabitem ${t.id===activeTabId?'active':''} ${viewedTabs.has(t.id)?'viewed':''}" data-id="${t.id}">
+        <span class="dot"></span>${t.label}${t.type==='log'?`<span class="cnt">${t.count}</span>`:''}
+      </div>`;
+    });
+  });
+  const sb = document.getElementById('tabSidebar');
+  sb.innerHTML = html;
+  [...sb.querySelectorAll('.tabitem')].forEach(el=>{
+    el.addEventListener('click',()=>{ activeTabId = el.dataset.id; viewedTabs.add(activeTabId); renderTabSidebar(); renderEvidence(); });
+  });
+}
+
+function renderEvidence(){
+  const t = TABS_BY_ID[activeTabId];
+  const header = document.getElementById('evHeader');
+  const body = document.getElementById('evBody');
+
+  if(t.type==='narrative'){
+    header.innerHTML = `<div class="title">${t.label}</div><div class="badgey">narrative record</div>`;
+    body.innerHTML = `<div class="evinner">${t.render()}</div>`;
+    return;
+  }
+
+  header.innerHTML = `<div class="title">${t.label}</div><div class="badgey">${t.count} events</div>
+    <div class="querybar"><span class="icon">⌕</span><input type="text" placeholder="Search this log (e.g. an IP, a user, a domain)..." value="${searchTerms[t.id]||''}" id="searchInput"></div>
+    <div class="querybar cnt" id="searchCnt" style="min-width:auto;background:transparent;border:none;padding:0;">${t.count} rows</div>`;
+
+  function draw(filter){
+    let rows = t.data;
+    if(filter){
+      const f = filter.toLowerCase();
+      rows = rows.filter(r=>t.search(r).toLowerCase().includes(f));
+    }
+    document.getElementById('searchCnt').textContent = `${rows.length} / ${t.count} rows`;
+    body.innerHTML = rows.length ? tableHTML(t.id, t.cols, rows, t.rowFn) : `<div class="emptyrows">No rows match that query.</div>`;
+  }
+  draw(searchTerms[t.id]||'');
+  const inp = document.getElementById('searchInput');
+  inp.addEventListener('input', ()=>{ searchTerms[t.id] = inp.value; draw(inp.value); });
+}
+
+/* =====================================================================
+   RENDER: QUESTIONS
+   ===================================================================== */
+function renderDots(){
+  document.getElementById('dots').innerHTML = QUESTIONS.map((_,i)=>
+    `<div class="pdot ${i<currentQ?'done':i===currentQ?'current':''}"></div>`).join('');
+}
+function renderQuestion(){
+  renderDots();
+  document.getElementById('stepLabel').textContent = `Q${currentQ+1} / ${QUESTIONS.length}`;
+  const q = QUESTIONS[currentQ];
+  const st = answers[currentQ];
+  const area = document.getElementById('qBody');
+  area.innerHTML = `
+    <div class="q-meta">${q.meta}</div>
+    <div class="q-title">${q.title}</div>
+    <div class="q-sub">${q.sub}</div>
+    <textarea class="ans" id="ansBox" placeholder="Type your triage finding here...">${st.text}</textarea>
+    <div class="charcount" id="charcount">${st.text.length} chars</div>
+    ${st.submitted ? '<div class="answeredmark">✓ saved — you can still edit before finishing the case</div>' : ''}
+  `;
+  const box = document.getElementById('ansBox');
+  box.addEventListener('input', ()=>{
+    st.text = box.value;
+    document.getElementById('charcount').textContent = box.value.length+' chars';
+    updateNextBtn();
+  });
+  document.getElementById('backBtn').style.visibility = currentQ===0 ? 'hidden':'visible';
+  updateNextBtn();
+  updateSeverityBadge();
+}
+function updateNextBtn(){
+  const btn = document.getElementById('nextBtn');
+  const st = answers[currentQ];
+  const ready = st.text.trim().length>0;
+  btn.classList.toggle('ready', ready);
+  btn.textContent = currentQ===QUESTIONS.length-1 ? 'Finish Case' : 'Save & Continue';
+}
+function updateSeverityBadge(){
+  const badge = document.getElementById('sevBadge');
+  if(currentQ>=6){ badge.textContent='SEVERITY: HIGH (pending your final call)'; badge.classList.add('set'); }
+  else { badge.textContent='SEVERITY: UNDER REVIEW'; badge.classList.remove('set'); }
+}
+
+document.getElementById('nextBtn').addEventListener('click', ()=>{
+  const st = answers[currentQ];
+  if(!st.text.trim()) return;
+  st.submitted = true;
+  if(currentQ === QUESTIONS.length-1){ finishCase(); }
+  else{ currentQ++; renderQuestion(); }
+});
+document.getElementById('backBtn').addEventListener('click', ()=>{
+  if(currentQ>0){ currentQ--; renderQuestion(); }
+});
+
+/* =====================================================================
+   CLOCK
+   ===================================================================== */
+function tickClock(){
+  const s = Math.floor((Date.now()-startTime)/1000);
+  const m = String(Math.floor(s/60)).padStart(2,'0');
+  const sec = String(s%60).padStart(2,'0');
+  const txt = `${m}:${sec}`;
+  const c1 = document.getElementById('clock'); if(c1) c1.textContent = txt;
+  const c2 = document.getElementById('clockPill'); if(c2) c2.textContent = txt+' elapsed';
+}
+
+/* =====================================================================
+   GRADING + REPORT
+   ===================================================================== */
+function letterGrade(pct){
+  if(pct>=90) return {g:'A', cls:'grade-A'};
+  if(pct>=75) return {g:'B', cls:'grade-B'};
+  if(pct>=55) return {g:'C', cls:'grade-C'};
+  return {g:'D', cls:'grade-D'};
+}
+
+function finishCase(){
+  clearInterval(clockInterval);
+  document.getElementById('mainApp').classList.add('hidden');
+  const rw = document.getElementById('reportScreen');
+  rw.classList.remove('hidden');
+
+  const results = QUESTIONS.map((q,i)=>q.grade(answers[i].text));
+  const overall = Math.round(results.reduce((a,r)=>a+r.score,0)/results.length);
+  const grade = letterGrade(overall);
+  let verdict;
+  if(overall>=90) verdict = 'Excellent triage instincts — every major IOC was correctly identified and the response chain was sound.';
+  else if(overall>=75) verdict = 'Solid casework overall, with a few gaps worth reviewing against the evidence tabs.';
+  else if(overall>=55) verdict = 'You caught some of the signal but missed key correlations — worth a second pass through the log tabs.';
+  else verdict = 'Several core indicators were missed. Re-review the Sign-In Logs, Mailbox Audit Log, and Message Headers tabs.';
+
+  const ct = CASE;
+  const timelineItems = [
+    { t:ct.emailSent, d:`Phishing email delivered to ${ct.victim.email} from spoofed domain ${ct.attackerDomain}.` },
+    { t:ct.emailOpened, d:`${ct.victim.name} opens the email and submits credentials on the attacker's page.` },
+    { t:ct.reportedByUser, d:`${ct.victim.name} reports the message via "Report Phishing."` },
+    { t:ct.anomLogin, d:`Sign-in succeeds from ${ct.attackerGeo[0]}, ${ct.attackerGeo[1]} (${ct.attackerIP}) on an unrecognized device.` },
+    { t:ct.mfaAccept, d:`MFA push accepted from the same unrecognized device.` },
+    { t:ct.ruleCreated, d:`Inbox rule created, forwarding payment/invoice-themed mail to ${ct.forwardEmail}.` },
+    { t:ct.sharepointAccess, d:`Attacker session accesses the Finance SharePoint site.` },
+    { t:ct.alertFired, d:`Correlation alert fires in the SIEM, escalating to Tier 1 queue.` }
+  ].sort((a,b)=>a.t-b.t);
+
+  rw.innerHTML = `
+    <div class="rhero">
+      <div class="num">${overall}<span style="font-size:20px;color:var(--muted);">/100</span></div>
+      <div class="of">OVERALL SCORE</div>
+      <div class="grade ${grade.cls}">GRADE ${grade.g}</div>
+      <div class="verdict">${verdict}</div>
+    </div>
+
+    <div class="rsection">
+      <h2>Case Summary</h2>
+      <div class="kvgrid">
+        <div class="k">Ticket</div><div class="v">#${ct.ticket}</div>
+        <div class="k">Organization</div><div class="v">${ct.company.name} (${ct.company.domain})</div>
+        <div class="k">Affected user</div><div class="v">${ct.victim.name} — ${ct.victim.role}, ${ct.victim.dept}</div>
+        <div class="k">Incident type</div><div class="v">Phishing-initiated credential compromise / BEC precursor</div>
+        <div class="k">Time to complete</div><div class="v">${document.getElementById('clock')?document.getElementById('clock').textContent:'—'}</div>
+      </div>
+    </div>
+
+    <div class="rsection">
+      <h2>Confirmed Indicators of Compromise</h2>
+      <table class="ioctable">
+        <thead><tr><th>Type</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td>Lure domain</td><td>${ct.attackerDomain}</td></tr>
+          <tr><td>Attacker IP</td><td>${ct.attackerIP}</td></tr>
+          <tr><td>Attacker geo</td><td>${ct.attackerGeo[0]}, ${ct.attackerGeo[1]}</td></tr>
+          <tr><td>Compromised account</td><td>${ct.victim.email}</td></tr>
+          <tr><td>Malicious forwarding address</td><td>${ct.forwardEmail}</td></tr>
+          <tr><td>Return-Path domain</td><td>${ct.attackerReturnPathDomain}</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="rsection">
+      <h2>Reconstructed Timeline</h2>
+      <div class="timeline">
+        ${timelineItems.map(it=>`<div class="tlitem"><div class="tltime">${fmtDT(it.t)}</div><div class="tldesc">${it.d}</div></div>`).join('')}
+      </div>
+    </div>
+
+    <div class="rsection">
+      <h2>Question-by-Question Review</h2>
+      ${QUESTIONS.map((q,i)=>{
+        const r = results[i];
+        const sc = r.score>=80?'s-hi':(r.score>=50?'s-mid':'s-lo');
+        return `<div class="qreview">
+          <div class="qrhead"><div class="qrtitle">${q.title}</div><div class="qrscore ${sc}">${r.score}%</div></div>
+          <div class="yourans">${(answers[i].text||'(no answer submitted)').replace(/</g,'&lt;')}</div>
+          <div class="kwrow">${r.keywords.map(k=>`<span class="kw ${k.hit?'hit':'miss'}">${k.hit?'✓':'✕'} ${k.label}</span>`).join('')}</div>
+          <div class="refans"><b>Reference finding:</b> ${r.reference}</div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    <div class="rfooter">
+      <button class="btn ready" onclick="location.reload()">Pull Next Case</button>
+    </div>
+  `;
+}
+
+/* =====================================================================
+   INIT
+   ===================================================================== */
+renderScenarioGrid();
+</script>
+</body>
+</html>
